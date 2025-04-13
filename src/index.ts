@@ -1,49 +1,42 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import axios from "axios";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { ReimbursementRequest } from "./database.js";
+import {
+  createReimbursementRequest,
+  getReimbursementRequests,
+  submitReimbursementRequestDocuments,
+} from "./api.js";
 import { ExpenseType } from "./enums.js";
+import { ReimbursementRequest } from "./types.js";
+import { toPaise, toRupees } from "./utils.js";
 
 dotenv.config();
 
-const getReimbursementRequests = async (): Promise<ReimbursementRequest[]> => {
-  const reimbursementRequestsUrl = `${process.env.CRAZE_API_URL}/organizations/${process.env.ORGANIZATION_ID}/approval-records/requester-view/${process.env.USER_ID}/REIMBURSEMENT`;
-  const response = await fetch(reimbursementRequestsUrl, {
-    headers: {
-      Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
-    },
-  });
-  return response.json();
-};
+axios.interceptors.request.use(
+  (config) => {
+    config.headers["Authorization"] = "Bearer " + process.env.ACCESS_TOKEN;
+    return config;
+  },
+  (error) => {
+    console.log(error);
+    void Promise.reject(error);
+  }
+);
 
-const createReimbursementRequest = async (
-  reimbursementRequest: object
-): Promise<void> => {
-  const reimbursementRequestsUrl = `${process.env.CRAZE_API_URL}/organizations/${process.env.ORGANIZATION_ID}/approval-records/${process.env.USER_ID}/REIMBURSEMENT`;
-  const response = await fetch(reimbursementRequestsUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify(reimbursementRequest),
-  });
-};
-
-// Format alert data
-function formatReimbursementRequest(
+const formatReimbursementRequest = (
   reimbursementRequest: ReimbursementRequest
-): string {
+): string => {
   return [
-    `Amount: ${reimbursementRequest.amount || "Unknown"}`,
+    `Amount: Rs.${toRupees(reimbursementRequest.amount)}`,
     `Date: ${reimbursementRequest.expense_date || "Unknown"}`,
     `Created at: ${reimbursementRequest.created_at || "Unknown"}`,
     `Expense type: ${reimbursementRequest.expense_type || "Unknown"}`,
     `Status: ${reimbursementRequest.approval_record.status || "Unknown"}`,
     `Comment: ${reimbursementRequest.approval_record.comment || "Unknown"}`,
   ].join("\n");
-}
+};
 
 // Create server instance
 const server = new McpServer({
@@ -108,13 +101,30 @@ server.tool(
         .optional()
         .describe("Comment for the reimbursement request"),
     }),
+    documents: z
+      .array(z.instanceof(File), {
+        required_error: "Please upload at least one supporting document",
+      })
+      .optional()
+      .describe("Supporting documents for the reimbursement request"),
   },
   async (reimbursementRequest) => {
     try {
       // Convert amount from rupees to paise
-      reimbursementRequest.request.amount =
-        reimbursementRequest.request.amount * 100;
-      await createReimbursementRequest(reimbursementRequest);
+      reimbursementRequest.request.amount = toPaise(
+        reimbursementRequest.request.amount
+      );
+      const reimbursementRequestId = await createReimbursementRequest(
+        reimbursementRequest
+      );
+
+      if (reimbursementRequest.documents) {
+        await submitReimbursementRequestDocuments(
+          reimbursementRequestId,
+          reimbursementRequest.documents
+        );
+      }
+
       return {
         content: [
           {
@@ -136,11 +146,11 @@ server.tool(
   }
 );
 
-async function main() {
+const main = async () => {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Craze MCP Server running on stdio");
-}
+};
 
 main().catch((error) => {
   console.error("Fatal error in main():", error);

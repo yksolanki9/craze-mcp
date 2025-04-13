@@ -7,7 +7,7 @@ import { ExpenseType } from "./enums.js";
 
 dotenv.config();
 
-const getReimbursementRequests = async () => {
+const getReimbursementRequests = async (): Promise<ReimbursementRequest[]> => {
   const reimbursementRequestsUrl = `${process.env.CRAZE_API_URL}/organizations/${process.env.ORGANIZATION_ID}/approval-records/requester-view/${process.env.USER_ID}/REIMBURSEMENT`;
   const response = await fetch(reimbursementRequestsUrl, {
     headers: {
@@ -21,7 +21,7 @@ const createReimbursementRequest = async (reimbursementRequest: {
   amount: number;
   expense_date: string;
   expense_type: ExpenseType;
-}) => {
+}): Promise<void> => {
   const reimbursementRequestsUrl = `${process.env.CRAZE_API_URL}/organizations/${process.env.ORGANIZATION_ID}/approval-records/${process.env.USER_ID}/REIMBURSEMENT`;
   const response = await fetch(reimbursementRequestsUrl, {
     method: "POST",
@@ -33,16 +33,6 @@ const createReimbursementRequest = async (reimbursementRequest: {
   });
 };
 
-interface AlertFeature {
-  properties: {
-    event?: string;
-    areaDesc?: string;
-    severity?: string;
-    status?: string;
-    headline?: string;
-  };
-}
-
 // Format alert data
 function formatReimbursementRequest(
   reimbursementRequest: ReimbursementRequest
@@ -53,32 +43,9 @@ function formatReimbursementRequest(
     `Date: ${props.expense_date || "Unknown"}`,
     `Created at: ${props.created_at || "Unknown"}`,
     `Expense type: ${props.expense_type || "Unknown"}`,
+    `Status: ${props.approval_record.status || "Unknown"}`,
+    `Comment: ${props.approval_record.comment || "Unknown"}`,
   ].join("\n");
-}
-
-interface ForecastPeriod {
-  name?: string;
-  temperature?: number;
-  temperatureUnit?: string;
-  windSpeed?: string;
-  windDirection?: string;
-  shortForecast?: string;
-}
-
-interface AlertsResponse {
-  features: AlertFeature[];
-}
-
-interface PointsResponse {
-  properties: {
-    forecast?: string;
-  };
-}
-
-interface ForecastResponse {
-  properties: {
-    periods: ForecastPeriod[];
-  };
 }
 
 // Create server instance

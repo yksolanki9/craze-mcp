@@ -25,7 +25,7 @@ export const getS3PutFileConfig = (contentType: string) => ({
 export const putReimbursementDocument = async (
   reimbursementRequestId: string,
   documentName: string,
-  document: File
+  document: Buffer<ArrayBufferLike>
 ): Promise<void> => {
   // PUT request to the internal API
   const response = await axios.put(
@@ -36,24 +36,7 @@ export const putReimbursementDocument = async (
   await axios.put(
     response.data.presignedUrl,
     document,
-    getS3PutFileConfig(document.type)
-  );
-};
-
-/**
- * PUT documents to S3
- * @param requestId - Request ID
- * @param documents - Documents to upload
- */
-export const submitReimbursementRequestDocuments = async (
-  requestId: string,
-  documents: File[]
-) => {
-  // Upload added documents to S3
-  await Promise.allSettled(
-    documents.map((document) =>
-      putReimbursementDocument(requestId, document.name, document)
-    )
+    getS3PutFileConfig("application/pdf")
   );
 };
 

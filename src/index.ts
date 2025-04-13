@@ -2,15 +2,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import axios from "axios";
 import dotenv from "dotenv";
+import { readFile } from "fs/promises";
 import { z } from "zod";
 import {
   createReimbursementRequest,
   getReimbursementRequests,
-  submitReimbursementRequestDocuments,
+  putReimbursementDocument,
 } from "./api.js";
 import { ExpenseType } from "./enums.js";
 import { ReimbursementRequest } from "./types.js";
-import { toPaise, toRupees } from "./utils.js";
+import { toRupees } from "./utils.js";
 
 dotenv.config();
 
@@ -101,27 +102,25 @@ server.tool(
         .optional()
         .describe("Comment for the reimbursement request"),
     }),
-    documents: z
-      .array(z.instanceof(File), {
-        required_error: "Please upload at least one supporting document",
-      })
+    file_path: z
+      .string()
       .optional()
-      .describe("Supporting documents for the reimbursement request"),
+      .describe("File path for the reimbursement request"),
   },
   async (reimbursementRequest) => {
     try {
-      // Convert amount from rupees to paise
-      reimbursementRequest.request.amount = toPaise(
-        reimbursementRequest.request.amount
-      );
       const reimbursementRequestId = await createReimbursementRequest(
         reimbursementRequest
       );
 
-      if (reimbursementRequest.documents) {
-        await submitReimbursementRequestDocuments(
+      if (reimbursementRequest.file_path) {
+        const file = await readFile(
+          process.env.BASE_FILE_PATH + reimbursementRequest.file_path
+        );
+        await putReimbursementDocument(
           reimbursementRequestId,
-          reimbursementRequest.documents
+          reimbursementRequest.file_path,
+          file
         );
       }
 
@@ -134,6 +133,7 @@ server.tool(
         ],
       };
     } catch (error) {
+      console.error(error);
       return {
         content: [
           {

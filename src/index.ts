@@ -17,11 +17,9 @@ const getReimbursementRequests = async (): Promise<ReimbursementRequest[]> => {
   return response.json();
 };
 
-const createReimbursementRequest = async (reimbursementRequest: {
-  amount: number;
-  expense_date: string;
-  expense_type: ExpenseType;
-}): Promise<void> => {
+const createReimbursementRequest = async (
+  reimbursementRequest: object
+): Promise<void> => {
   const reimbursementRequestsUrl = `${process.env.CRAZE_API_URL}/organizations/${process.env.ORGANIZATION_ID}/approval-records/${process.env.USER_ID}/REIMBURSEMENT`;
   const response = await fetch(reimbursementRequestsUrl, {
     method: "POST",
@@ -37,14 +35,13 @@ const createReimbursementRequest = async (reimbursementRequest: {
 function formatReimbursementRequest(
   reimbursementRequest: ReimbursementRequest
 ): string {
-  const props = reimbursementRequest;
   return [
-    `Amount: ${props.amount || "Unknown"}`,
-    `Date: ${props.expense_date || "Unknown"}`,
-    `Created at: ${props.created_at || "Unknown"}`,
-    `Expense type: ${props.expense_type || "Unknown"}`,
-    `Status: ${props.approval_record.status || "Unknown"}`,
-    `Comment: ${props.approval_record.comment || "Unknown"}`,
+    `Amount: ${reimbursementRequest.amount || "Unknown"}`,
+    `Date: ${reimbursementRequest.expense_date || "Unknown"}`,
+    `Created at: ${reimbursementRequest.created_at || "Unknown"}`,
+    `Expense type: ${reimbursementRequest.expense_type || "Unknown"}`,
+    `Status: ${reimbursementRequest.approval_record.status || "Unknown"}`,
+    `Comment: ${reimbursementRequest.approval_record.comment || "Unknown"}`,
   ].join("\n");
 }
 
@@ -98,12 +95,25 @@ server.tool(
   "create-reimbursement-request",
   "Create a reimbursement request",
   {
-    amount: z.number().describe("Amount of the reimbursement request"),
-    expense_date: z.string().describe("Date of the expense"),
-    expense_type: z.nativeEnum(ExpenseType).describe("Type of the expense"),
+    request: z.object({
+      amount: z
+        .number()
+        .describe("Amount of the reimbursement request in paise"),
+      expense_date: z.string().describe("Date of the expense"),
+      expense_type: z.nativeEnum(ExpenseType).describe("Type of the expense"),
+    }),
+    approval_record: z.object({
+      comment: z
+        .string()
+        .optional()
+        .describe("Comment for the reimbursement request"),
+    }),
   },
   async (reimbursementRequest) => {
     try {
+      // Convert amount from rupees to paise
+      reimbursementRequest.request.amount =
+        reimbursementRequest.request.amount * 100;
       await createReimbursementRequest(reimbursementRequest);
       return {
         content: [
